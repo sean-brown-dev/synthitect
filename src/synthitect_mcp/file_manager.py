@@ -66,7 +66,10 @@ class FileManager:
         return file_path
 
     def read_template(self, template_name: str) -> str:
-        """Read a prompt template from the prompts directory.
+        """Read a prompt template from the bundled prompts directory.
+
+        Templates are bundled with the package, not relative to base_dir,
+        since plans go to the target project but prompts are fixed CFAW templates.
 
         Args:
             template_name: Name of the template file (e.g., 'discovery-phase.md').
@@ -74,7 +77,11 @@ class FileManager:
         Returns:
             Template contents as string.
         """
-        return self.read_file(f"prompts/{template_name}")
+        prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+        template_path = prompts_dir / template_name
+        if not template_path.exists():
+            raise FileNotFoundError(f"Template not found: {template_path}")
+        return template_path.read_text(encoding="utf-8")
 
     def inject_variables(self, template: str, variables: dict[str, str]) -> str:
         """Inject variables into a template using {{ variable }} syntax.

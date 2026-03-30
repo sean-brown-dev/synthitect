@@ -145,6 +145,47 @@ class TestServerTools:
         assert "Probe Report" in text
         assert "Cache model" in text
 
+    @pytest.mark.asyncio
+    async def test_run_discovery_writes_discovery_file(self, fm):
+        """Test that run_discovery writes discovery.md file."""
+        result = await run_discovery(fm, {
+            "ticket_id": "DISC-002",
+            "raw_idea": "Add feature X",
+            "probe_reports": "# Probe Report\n- Model A found"
+        })
+
+        discovery_path = fm.base_dir / "plans" / "DISC-002" / "discovery.md"
+        assert discovery_path.exists(), "discovery.md should be created by run_discovery"
+
+        content = discovery_path.read_text()
+        assert "Add feature X" in content
+        assert "# Probe Report" in content
+
+    @pytest.mark.asyncio
+    async def test_run_discovery_sets_phase_state_in_progress(self, fm):
+        """Test that run_discovery sets phase state to in-progress (not completed)."""
+        result = await run_discovery(fm, {
+            "ticket_id": "DISC-003",
+            "raw_idea": "Test phase state",
+            "probe_reports": "# Probe"
+        })
+
+        state = fm.get_phase_state("DISC-003")
+        assert state["current_phase"] == "discovery"
+        assert "discovery" not in state["completed_phases"]
+
+    @pytest.mark.asyncio
+    async def test_run_discovery_enables_generate_specs(self, fm):
+        """Test that after run_discovery, generate_specs can proceed."""
+        await run_discovery(fm, {
+            "ticket_id": "DISC-004",
+            "raw_idea": "Test flow",
+            "probe_reports": "# Probe"
+        })
+
+        result = await generate_specs(fm, {"ticket_id": "DISC-004", "tier": "Tier 2"})
+        assert "ERROR" not in result[0].text, "generate_specs should succeed after run_discovery"
+
     # =========================================================================
     # generate_specs Tests
     # =========================================================================
@@ -178,6 +219,51 @@ class TestServerTools:
 
         assert "ERROR" in result[0].text
         assert "Discovery phase not completed" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_generate_specs_writes_spec_files(self, fm):
+        """Test that generate_specs writes spec.md and test_spec.md files."""
+        # Setup: run discovery first to create discovery.md
+        await run_discovery(fm, {
+            "ticket_id": "SPEC-TEST-001",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe Report"
+        })
+
+        result = await generate_specs(fm, {"ticket_id": "SPEC-TEST-001", "tier": "Tier 2"})
+
+        spec_path = fm.base_dir / "plans" / "SPEC-TEST-001" / "spec.md"
+        test_spec_path = fm.base_dir / "plans" / "SPEC-TEST-001" / "test_spec.md"
+        assert spec_path.exists(), "spec.md should be created by generate_specs"
+        assert test_spec_path.exists(), "test_spec.md should be created by generate_specs"
+
+    @pytest.mark.asyncio
+    async def test_generate_specs_sets_spec_phase_in_progress(self, fm):
+        """Test that generate_specs sets spec phase to in-progress."""
+        await run_discovery(fm, {
+            "ticket_id": "SPEC-TEST-002",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe"
+        })
+
+        result = await generate_specs(fm, {"ticket_id": "SPEC-TEST-002", "tier": "Tier 2"})
+
+        state = fm.get_phase_state("SPEC-TEST-002")
+        assert state["current_phase"] == "spec"
+        assert "spec" not in state["completed_phases"]
+
+    @pytest.mark.asyncio
+    async def test_generate_specs_enables_execute_tdd_red(self, fm):
+        """Test that after generate_specs, execute_tdd_red can proceed."""
+        await run_discovery(fm, {
+            "ticket_id": "SPEC-TEST-003",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe"
+        })
+        await generate_specs(fm, {"ticket_id": "SPEC-TEST-003", "tier": "Tier 2"})
+
+        result = await execute_tdd_red(fm, {"ticket_id": "SPEC-TEST-003", "tier": "Tier 2"})
+        assert "ERROR" not in result[0].text, "execute_tdd_red should succeed after generate_specs"
 
     # =========================================================================
     # execute_tdd_red Tests
@@ -214,6 +300,51 @@ class TestServerTools:
 
         assert "ERROR" in result[0].text
         assert "Spec phase not completed" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_execute_tdd_red_writes_stub_file(self, fm):
+        """Test that execute_tdd_red writes stub_implementation.py file."""
+        # Setup: run discovery and generate_specs to create spec files
+        await run_discovery(fm, {
+            "ticket_id": "TDD-TEST-001",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe"
+        })
+        await generate_specs(fm, {"ticket_id": "TDD-TEST-001", "tier": "Tier 2"})
+
+        result = await execute_tdd_red(fm, {"ticket_id": "TDD-TEST-001", "tier": "Tier 2"})
+
+        stub_path = fm.base_dir / "plans" / "TDD-TEST-001" / "stub_implementation.py"
+        assert stub_path.exists(), "stub_implementation.py should be created by execute_tdd_red"
+
+    @pytest.mark.asyncio
+    async def test_execute_tdd_red_sets_tdd_red_phase_completed(self, fm):
+        """Test that execute_tdd_red sets tdd_red phase to completed."""
+        await run_discovery(fm, {
+            "ticket_id": "TDD-TEST-002",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe"
+        })
+        await generate_specs(fm, {"ticket_id": "TDD-TEST-002", "tier": "Tier 2"})
+
+        result = await execute_tdd_red(fm, {"ticket_id": "TDD-TEST-002", "tier": "Tier 2"})
+
+        state = fm.get_phase_state("TDD-TEST-002")
+        assert "tdd_red" in state["completed_phases"], "tdd_red should be in completed_phases"
+
+    @pytest.mark.asyncio
+    async def test_execute_tdd_red_enables_implement_green(self, fm):
+        """Test that after execute_tdd_red, implement_green can proceed."""
+        await run_discovery(fm, {
+            "ticket_id": "TDD-TEST-003",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe"
+        })
+        await generate_specs(fm, {"ticket_id": "TDD-TEST-003", "tier": "Tier 2"})
+        await execute_tdd_red(fm, {"ticket_id": "TDD-TEST-003", "tier": "Tier 2"})
+
+        result = await implement_green(fm, {"ticket_id": "TDD-TEST-003", "tier": "Tier 2"})
+        assert "ERROR" not in result[0].text, "implement_green should succeed after execute_tdd_red"
 
     # =========================================================================
     # implement_green Tests
@@ -265,6 +396,23 @@ class TestServerTools:
 
         assert "ERROR" not in result[0].text
         assert len(result[0].text) > 100
+
+    @pytest.mark.asyncio
+    async def test_implement_green_sets_implementation_phase_in_progress(self, fm):
+        """Test that implement_green sets implementation phase to in-progress."""
+        await run_discovery(fm, {
+            "ticket_id": "IMPL-TEST-001",
+            "raw_idea": "Test feature",
+            "probe_reports": "# Probe"
+        })
+        await generate_specs(fm, {"ticket_id": "IMPL-TEST-001", "tier": "Tier 2"})
+        await execute_tdd_red(fm, {"ticket_id": "IMPL-TEST-001", "tier": "Tier 2"})
+
+        result = await implement_green(fm, {"ticket_id": "IMPL-TEST-001", "tier": "Tier 2"})
+
+        state = fm.get_phase_state("IMPL-TEST-001")
+        assert state["current_phase"] == "implementation"
+        assert "implementation" not in state["completed_phases"]
 
     # =========================================================================
     # run_audit Tests
@@ -337,19 +485,7 @@ class TestServerTools:
 class TestToolDescriptions:
     """Tests for tool input schema validation."""
 
-    @pytest.fixture
-    def temp_dir(self):
-        """Create a temporary directory for tests."""
-        tmp = tempfile.mkdtemp()
-        yield Path(tmp)
-        shutil.rmtree(tmp)
-
-    @pytest.fixture
-    def fm(self, temp_dir):
-        """Create a FileManager instance."""
-        return FileManager(str(temp_dir))
-
-    def test_run_discovery_requires_fields(self, fm):
+    def test_run_discovery_requires_fields(self):
         """Test that run_discovery tool validates required fields."""
         from synthitect_mcp.server import TOOLS
 
@@ -361,7 +497,7 @@ class TestToolDescriptions:
         assert "raw_idea" in schema["required"]
         assert "probe_reports" in schema["required"]
 
-    def test_spawn_probe_requires_fields(self, fm):
+    def test_spawn_probe_requires_fields(self):
         """Test that spawn_probe tool validates required fields."""
         from synthitect_mcp.server import TOOLS
 
@@ -374,7 +510,7 @@ class TestToolDescriptions:
         assert "directory" in schema["required"]
         assert "raw_idea" in schema["required"]
 
-    def test_tier_has_default(self, fm):
+    def test_tier_has_default(self):
         """Test that tier parameter has a default value."""
         from synthitect_mcp.server import TOOLS
 

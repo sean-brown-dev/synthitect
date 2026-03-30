@@ -26,12 +26,6 @@ class TestFileManager:
         """Create a FileManager instance with temp directory."""
         return FileManager(str(temp_dir))
 
-    @pytest.fixture
-    def fm_with_ticket(self, fm):
-        """Create a FileManager with a pre-created ticket directory."""
-        ticket_dir = fm.create_ticket_directory("TEST-001")
-        return fm, ticket_dir
-
     # =========================================================================
     # Directory Creation Tests
     # =========================================================================
@@ -71,16 +65,119 @@ class TestFileManager:
         with pytest.raises(FileNotFoundError):
             fm.read_file("nonexistent.txt")
 
-    def test_read_template(self, fm, temp_dir):
-        """Test reading a template from prompts directory."""
-        # Create prompts directory and template
-        prompts_dir = temp_dir / "prompts"
-        prompts_dir.mkdir()
-        template_content = "Hello {{ name }}"
-        (prompts_dir / "test-template.md").write_text(template_content)
+    def test_read_template(self, fm):
+        """Test reading a bundled template from prompts directory.
 
-        result = fm.read_template("test-template.md")
-        assert result == template_content
+        Note: Templates are bundled with the package, NOT in base_dir.
+        This test verifies actual bundled template reading.
+        """
+        result = fm.read_template("probe-phase.md")
+        assert len(result) > 0
+        assert "Probe" in result or "probe" in result.lower()
+
+    # =========================================================================
+    # Bundled Template Tests (Critical for Multi-Project Usage)
+    # =========================================================================
+
+    def test_read_template_from_bundled_prompts_not_base_dir(self, temp_dir):
+        """Test that read_template uses bundled prompts, NOT base_dir.
+
+        This is a critical test for multi-project usage where SYNTHIECT_BASE_DIR
+        points to a different project but prompts are bundled with the package.
+
+        The bug this catches: read_template previously used base_dir, which broke
+        when base_dir was set to a project without a prompts directory.
+        """
+        # Create a FileManager with base_dir pointing somewhere WITHOUT prompts
+        fm = FileManager(str(temp_dir))
+
+        # Ensure no prompts directory exists in temp_dir
+        assert not (temp_dir / "prompts").exists()
+
+        # read_template should still work because it uses bundled prompts,
+        # not base_dir
+        result = fm.read_template("probe-phase.md")
+
+        # Should return actual bundled template content
+        assert len(result) > 0
+        assert "Probe Sub-Agent" in result or "probe" in result.lower()
+
+    def test_read_template_works_with_different_base_dir(self):
+        """Test that read_template works when base_dir is set to a different project.
+
+        Simulates the real-world scenario where SYNTHIECT_BASE_DIR=/path/to/projectA
+        but prompts are bundled with the MCP server package.
+        """
+        # Use /tmp as a "different project" that has no prompts
+        with tempfile.TemporaryDirectory() as temp_dir:
+            other_project = Path(temp_dir) / "other_project"
+            other_project.mkdir()
+
+            fm = FileManager(str(other_project))
+
+            # This should work - templates come from package, not base_dir
+            template = fm.read_template("discovery-phase.md")
+
+            assert len(template) > 0
+            assert "{{" in template  # Template has variables
+
+    def test_read_template_raises_for_missing_bundled_template(self):
+        """Test that read_template raises FileNotFoundError for non-existent template."""
+        fm = FileManager("/tmp/nonexistent_base")
+
+        with pytest.raises(FileNotFoundError) as exc_info:
+            fm.read_template("nonexistent-template.md")
+
+        assert "nonexistent-template.md" in str(exc_info.value)
+
+    def test_all_bundled_templates_exist(self):
+        """Test that all expected bundled templates actually exist."""
+        expected_templates = [
+            "probe-phase.md",
+            "discovery-phase.md",
+            "spec-phase.md",
+            "tdd-red-phase.md",
+            "implement-phase.md",
+            "audit-phase.md",
+        ]
+
+        fm = FileManager("/tmp")  # base_dir doesn't matter for bundled templates
+
+        for template_name in expected_templates:
+            try:
+                content = fm.read_template(template_name)
+                assert len(content) > 0, f"Template {template_name} is empty"
+            except FileNotFoundError:
+                pytest.fail(f"Bundled template {template_name} not found")
+
+    def test_templates_have_required_placeholders(self):
+        """Test that templates contain expected placeholders for phase completion."""
+        fm = FileManager("/tmp")
+
+        # Each phase template should have ticket_id placeholder
+        for template_name in ["discovery-phase.md", "spec-phase.md", "tdd-red-phase.md",
+                              "implement-phase.md", "audit-phase.md"]:
+            content = fm.read_template(template_name)
+            assert "{{ ticket_id }}" in content or "{{ticket_id}}" in content, \
+                f"Template {template_name} missing ticket_id placeholder"
+
+    def test_plans_go_to_base_dir_not_prompts_dir(self, temp_dir):
+        """Test that plans directory is created relative to base_dir, not prompts.
+
+        This ensures the separation: plans in project, prompts in package.
+        """
+        fm = FileManager(str(temp_dir))
+
+        # Create a ticket
+        ticket_path = fm.create_ticket_directory("TEST-999")
+
+        # Plan should be in temp_dir/plans/TEST-999, not in prompts
+        assert ticket_path.parent.parent == temp_dir
+        assert (temp_dir / "plans" / "TEST-999") == ticket_path
+
+        # Verify no prompts directory was created in temp_dir
+        # (prompts come from package, not base_dir)
+        assert not (temp_dir / "prompts").exists()
 
     # =========================================================================
     # Variable Injection Tests
