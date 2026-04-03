@@ -50,16 +50,16 @@ python -m synthitect_mcp
 
 ### MCP Tools (6 tools for MoA architecture)
 
+Each tool returns a **text briefing**. The Orchestrator MUST spawn a sub-agent and pass the briefing as instructions. The MCP server does NOT execute sub-agents.
+
 | Tool | Description |
 |------|-------------|
-| `spawn_probe(ticket_id, layer_name, directory, raw_idea)` | Generates Probe Sub-Agent briefing for parallel discovery |
-| `run_discovery(ticket_id, raw_idea, probe_reports)` | Generates Discovery Synthesizer briefing |
-| `generate_specs(ticket_id)` | Generates Spec Architect briefing |
-| `execute_tdd_red(ticket_id)` | Generates SDET Sub-Agent briefing |
-| `implement_green(ticket_id)` | Generates Implementation Engineer briefing |
-| `run_audit(ticket_id)` | Generates Principal Auditor briefing |
-
-Each tool returns a **Sub-Agent Briefing** — a structured prompt that the Orchestrator hands off to a specialized sub-agent.
+| `generate_probe_briefing(ticket_id, layer_name, directory, raw_idea)` | Generates Probe Sub-Agent briefing for parallel discovery |
+| `generate_discovery_briefing(ticket_id, raw_idea, probe_reports)` | Generates Discovery Synthesizer briefing |
+| `generate_spec_briefing(ticket_id, tier)` | Generates Spec Architect briefing |
+| `generate_tdd_red_briefing(ticket_id, tier)` | Generates SDET Sub-Agent briefing |
+| `generate_implementation_briefing(ticket_id, tier)` | Generates Implementation Engineer briefing |
+| `generate_audit_briefing(ticket_id, tier)` | Generates Principal Auditor briefing |
 
 ### Integration with Claude Code
 
@@ -132,15 +132,15 @@ Orchestrator: I'll execute the Synthitect Protocol for this feature.
 
 Step 1: Spawn parallel Probe Sub-Agents
 
-Orchestrator uses spawn_probe for each layer:
-- spawn_probe(ticket_id="FEAT-001", layer_name="Domain Layer", directory="src/domain/")
-- spawn_probe(ticket_id="FEAT-001", layer_name="Data Layer", directory="src/data/")
-- spawn_probe(ticket_id="FEAT-001", layer_name="Presentation Layer", directory="src/ui/")
+Orchestrator uses generate_probe_briefing for each layer:
+- generate_probe_briefing(ticket_id="FEAT-001", layer_name="Domain Layer", directory="src/domain/")
+- generate_probe_briefing(ticket_id="FEAT-001", layer_name="Data Layer", directory="src/data/")
+- generate_probe_briefing(ticket_id="FEAT-001", layer_name="Presentation Layer", directory="src/ui/")
 
 Step 2: Synthesize discovery
 
-Orchestrator uses run_discovery:
-run_discovery(
+Orchestrator uses generate_discovery_briefing:
+generate_discovery_briefing(
   ticket_id="FEAT-001",
   raw_idea="Add offline-first sync for user preferences",
   probe_reports="[concatenated probe outputs]"
@@ -155,31 +155,31 @@ ELSE:
 
 Step 4: Generate specs
 
-Orchestrator uses generate_specs:
-generate_specs(ticket_id="FEAT-001")
-→ Returns briefing for Spec Architect Sub-Agent
+Orchestrator uses generate_spec_briefing:
+generate_spec_briefing(ticket_id="FEAT-001", tier="Tier 2")
+→ Returns briefing for Orchestrator to give to Spec Architect Sub-Agent
 
 HUMAN GATE: Present spec.md + test_spec.md to Architect for approval
 
 Step 5: TDD Red
 
-Orchestrator uses execute_tdd_red:
-execute_tdd_red(ticket_id="FEAT-001")
-→ Returns briefing for SDET Sub-Agent
+Orchestrator uses generate_tdd_red_briefing:
+generate_tdd_red_briefing(ticket_id="FEAT-001", tier="Tier 2")
+→ Returns briefing for Orchestrator to give to SDET Sub-Agent
 
 HUMAN GATE: Architect verifies all tests are RED
 
 Step 6: Implementation
 
-Orchestrator uses implement_green:
-implement_green(ticket_id="FEAT-001")
-→ Returns briefing for Implementation Engineer Sub-Agent
+Orchestrator uses generate_implementation_briefing:
+generate_implementation_briefing(ticket_id="FEAT-001", tier="Tier 2")
+→ Returns briefing for Orchestrator to give to Implementation Engineer Sub-Agent
 
 Step 7: Audit
 
-Orchestrator uses run_audit:
-run_audit(ticket_id="FEAT-001")
-→ Returns briefing for Principal Auditor Sub-Agent
+Orchestrator uses generate_audit_briefing:
+generate_audit_briefing(ticket_id="FEAT-001", tier="Tier 2")
+→ Returns briefing for Orchestrator to give to Principal Auditor Sub-Agent
 
 HUMAN GATE: Architect reviews audit verdict and approves merge
 ```
@@ -190,13 +190,13 @@ HUMAN GATE: Architect reviews audit verdict and approves merge
 // In Claude Code, you can invoke individual phases:
 
 // Re-run just the discovery for a new idea
-spawn_probe("FEAT-002", "Domain Layer", "src/domain/", "Add payment processing")
+generate_probe_briefing("FEAT-002", "Domain Layer", "src/domain/", "Add payment processing")
 
 // Generate specs after discovery is complete
-generate_specs("FEAT-002")
+generate_spec_briefing("FEAT-002", "Tier 2")
 
 // Skip to TDD if spec already exists
-execute_tdd_red("FEAT-002")
+generate_tdd_red_briefing("FEAT-002", "Tier 2")
 ```
 
 ### Example 3: Checking Phase Status
@@ -229,41 +229,41 @@ python -m synthitect_mcp
 /synthitect [idea]
     │
     ▼
-┌─────────────────────────────────────┐
-│  Phase 1: Discovery                 │
-│  run_discovery(ticket_id, idea)    │
-│  Output: plans/{id}/discovery.md   │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  Phase 1: Discovery                          │
+│  generate_discovery_briefing(ticket_id, idea)│
+│  Output: plans/{id}/discovery.md             │
+└──────────────────────────────────────────────┘
     │
     ▼
-┌─────────────────────────────────────┐
-│  Phase 2: Spec + Test Spec         │
-│  generate_specs(ticket_id)         │
-│  Output: plans/{id}/spec.md        │
-│          plans/{id}/test_spec.md   │
-└─────────────────────────────────────┘
-    │  HUMAN GATE: Architect approval  │
+┌──────────────────────────────────────────────┐
+│  Phase 2: Spec + Test Spec                   │
+│  generate_spec_briefing(ticket_id)           │
+│  Output: plans/{id}/spec.md                  │
+│          plans/{id}/test_spec.md             │
+└──────────────────────────────────────────────┘
+    │  HUMAN GATE: Architect approval          │
     ▼
-┌─────────────────────────────────────┐
-│  Phase 3: TDD Red                  │
-│  execute_tdd_red(ticket_id)        │
-│  Output: Failing tests             │
-└─────────────────────────────────────┘
-    │  HUMAN GATE: Red state verified │
+┌──────────────────────────────────────────────┐
+│  Phase 3: TDD Red                            │
+│  generate_tdd_red_briefing(ticket_id)        │
+│  Output: Briefing for SDET Sub-Agent         │
+└──────────────────────────────────────────────┘
+    │  HUMAN GATE: Red state verified          │
     ▼
-┌─────────────────────────────────────┐
-│  Phase 4: Implementation           │
-│  implement_green(ticket_id)        │
-│  Output: Production code           │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  Phase 4: Implementation                     │
+│  generate_implementation_briefing(ticket_id) │
+│  Output: Briefing for Implementation Engineer│
+└──────────────────────────────────────────────┘
     │
     ▼
-┌─────────────────────────────────────┐
-│  Phase 5: Audit                    │
-│  run_audit(ticket_id)              │
-│  Output: Audit report + verdict    │
-└─────────────────────────────────────┘
-    │  HUMAN GATE: Merge approval     │
+┌──────────────────────────────────────────────┐
+│  Phase 5: Audit                              │
+│  generate_audit_briefing(ticket_id)          │
+│  Output: Briefing for Principal Auditor      │
+└──────────────────────────────────────────────┘
+    │  HUMAN GATE: Merge approval              │
     ▼
    MERGE
 ```

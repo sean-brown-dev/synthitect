@@ -166,14 +166,17 @@ The Orchestrator uses these tool outputs to generate sub-agent briefings. Each b
 
 ### Briefing Generation Tools
 
-| Tool | Sub-Agent Spawned | Receives |
-|------|------------------|----------|
-| `spawn_probe(ticket_id, layer_name, directory, raw_idea)` | Probe Sub-Agent | layer_name + directory + raw_idea |
-| `run_discovery(ticket_id, raw_idea, probe_reports)` | Discovery Synthesizer | raw_idea + probe_reports |
-| `generate_specs(ticket_id, tier="Tier 2")` | Spec Architect | Constitution + discovery.md + briefing + tier scope |
-| `execute_tdd_red(ticket_id, tier="Tier 2")` | SDET | Constitution + spec.md + test_spec.md + briefing + tier scope |
-| `implement_green(ticket_id, tier="Tier 2")` | Implementation Engineer | Constitution + spec.md + test_spec.md + briefing + tier scope |
-| `run_audit(ticket_id, tier="Tier 2")` | Principal Auditor | Constitution + all artifacts + git diff + briefing |
+Each MCP tool returns a **text briefing**. The Orchestrator MUST spawn a sub-agent
+and pass the briefing as instructions. The MCP server does NOT execute sub-agents.
+
+| Tool | Sub-Agent to Spawn | Receives |
+|------|-------------------|----------|
+| `generate_probe_briefing(ticket_id, layer_name, directory, raw_idea)` | Probe Sub-Agent | layer_name + directory + raw_idea |
+| `generate_discovery_briefing(ticket_id, raw_idea, probe_reports)` | Discovery Synthesizer | raw_idea + probe_reports |
+| `generate_spec_briefing(ticket_id, tier="Tier 2")` | Spec Architect | Constitution + discovery.md + briefing + tier scope |
+| `generate_tdd_red_briefing(ticket_id, tier="Tier 2")` | SDET | Constitution + spec.md + test_spec.md + briefing + tier scope |
+| `generate_implementation_briefing(ticket_id, tier="Tier 2")` | Implementation Engineer | Constitution + spec.md + test_spec.md + briefing + tier scope |
+| `generate_audit_briefing(ticket_id, tier="Tier 2")` | Principal Auditor | Constitution + all artifacts + git diff + briefing |
 
 **Note:** The Constitution is loaded from the project's root configuration (AGENTS.md, CLAUDE.md, or equivalent). The Orchestrator ensures this is in the sub-agent's context — it is NOT managed by the MCP server.
 
@@ -264,11 +267,11 @@ You are the **Manager**, not the **Worker**:
 
 ## Orchestrator Tool Reference
 
-### MCP Tools (for generating sub-agent briefings)
+### MCP Tools (for generating sub-agent briefings — all return text, Orchestrator spawns sub-agents)
 
-- `spawn_probe(ticket_id, layer_name, directory, raw_idea)` → Probe Sub-Agent briefing
-- `run_discovery(ticket_id, raw_idea, probe_reports)` → Discovery Synthesizer briefing
-- `generate_specs(ticket_id, tier)` → Spec Architect briefing
-- `execute_tdd_red(ticket_id, tier)` → SDET briefing
-- `implement_green(ticket_id, tier)` → Implementation Engineer briefing
-- `run_audit(ticket_id, tier)` → Principal Auditor briefing
+- `generate_probe_briefing(ticket_id, layer_name, directory, raw_idea)` → Probe Sub-Agent briefing
+- `generate_discovery_briefing(ticket_id, raw_idea, probe_reports)` → Discovery Synthesizer briefing
+- `generate_spec_briefing(ticket_id, tier)` → Spec Architect briefing
+- `generate_tdd_red_briefing(ticket_id, tier)` → SDET briefing
+- `generate_implementation_briefing(ticket_id, tier)` → Implementation Engineer briefing
+- `generate_audit_briefing(ticket_id, tier)` → Principal Auditor briefing
