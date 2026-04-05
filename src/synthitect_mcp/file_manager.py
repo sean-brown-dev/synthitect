@@ -77,7 +77,7 @@ class FileManager:
         Returns:
             Template contents as string.
         """
-        prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+        prompts_dir = Path(__file__).parent / "prompts"
         template_path = prompts_dir / template_name
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")

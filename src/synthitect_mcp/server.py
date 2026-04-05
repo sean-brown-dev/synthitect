@@ -39,7 +39,7 @@ def get_file_manager() -> FileManager:
     Returns:
         FileManager instance.
     """
-    base_dir = os.environ.get("SYNTHIECT_BASE_DIR")
+    base_dir = os.environ.get("SYNTHITECT_BASE_DIR")
     return FileManager(base_dir)
 
 
@@ -601,8 +601,8 @@ async def main():
 
 def main_cli():
     """CLI entry point."""
-    import asyncio
-    asyncio.run(main())
+    import anyio
+    anyio.run(main)
 
 
 if __name__ == "__main__":
